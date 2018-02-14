@@ -7,7 +7,10 @@ import (
   "plugin"
   "runtime"
   "strings"
+  "time"
   "github.com/go-ini/ini"
+  elec "github.com/praneetb/golang/plgin/election"
+  etcl "github.com/praneetb/golang/plgin/etcdclient"
 )
 
 type PluginConf struct {
@@ -87,6 +90,7 @@ func (p *Plugin)CheckPlugin() {
 }
 
 // Callback function
+/*
 func Change(key, newValue string) {
   fmt.Printf("Changedd %s: %s\n", key, newValue)
   m := make(map[string]string)
@@ -95,30 +99,34 @@ func Change(key, newValue string) {
   AddJob(counter, m)
   fmt.Printf("#goroutines: %d\n", runtime.NumGoroutine())
 }
+*/
 
 func main() {
   fmt.Print("Hello\n\n")
 
-  pl := new(Plugin)
-  pl.ReadConf()
+  //pl := new(Plugin)
+  //pl.ReadConf()
 
-  WatcherInit(pl.Conf.NumberOfJobs)
-  InitDispatcher(pl.Conf.NumberOfGofers)
-  RunDispatcher()
+  //WatcherInit(pl.Conf.NumberOfJobs)
+  //InitDispatcher(pl.Conf.NumberOfGofers)
+  //RunDispatcher()
 
-  etcdcl, err := Dial("http://127.0.0.1:2379")
+  etcdcl, err := etcl.Dial("http://127.0.0.1:2379")
   if err != nil {
     fmt.Print("Error: ", err)
     return
   }
 
+  // MASTER ELECTION
+  elec.NewMember(etcdcl)
+
+  /*
   err = etcdcl.WatchRecursive("example", Change)
   if err != nil {
     fmt.Print("Error: ", err)
     return
   }
-
-
+  */
 
   //AddJob(10, nil)
   //AddJob(20, nil)
@@ -141,4 +149,8 @@ func main() {
   }
   */
 
+  for ; ; {
+    fmt.Printf("#goroutines: %d\n", runtime.NumGoroutine())
+    time.Sleep(100 * time.Second)
+  }
 }

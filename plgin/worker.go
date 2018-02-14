@@ -46,7 +46,7 @@ func (g *Gofer) Run() {
       case job := <-g.JobChan:
         // Received a Job Request, process it
         fmt.Printf("Gofer: %d, Received job request %d\n", g.GoferID, job.JobID)
-        time.Sleep(5)
+        time.Sleep(5 * time.Second)
         fmt.Printf("Gofer: %d, Slept for 5 seconds\n", g.GoferID)
 
       case <-g.ExitChan:

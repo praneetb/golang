@@ -5,10 +5,11 @@
  *
  */
 
-package main
+package etcdclient
 
 import (
   "fmt"
+  "time"
   "github.com/coreos/etcd/client"
   "golang.org/x/net/context"
 )
@@ -23,6 +24,12 @@ type EtcdClient interface {
   // Set sets a value in Etcd
   Set(key, value string) error
 
+  // Set sets a value in Etcd
+  SetWithTTL(key, value string, ttl time.Duration) error
+
+  // UpdateKeyWithTTL updates a key with a ttl value
+  UpdateKeyWithTTL(key string, ttl time.Duration) error
+
   // Recursively Watches a Dirctory for changes
   WatchRecursive(directory string, callback Callback) error
 }
@@ -34,7 +41,7 @@ type IntentEtcdClient struct {
 
 
 // Dial constructs a new EtcdClient
-func Dial(etcdURI string) (EtcdClient, error) {
+func Dial(etcdURI string) (*IntentEtcdClient, error) {
   cfg := client.Config{
     Endpoints: []string{etcdURI},
     //Transport: DefaultTransport,
@@ -67,6 +74,23 @@ func (etcdClient *IntentEtcdClient) Set(key, value string) error {
   _, err := api.Set(context.Background(), key, value, nil)
   return err
 }
+
+// Set sets a value in Etcd with TTL 
+func (etcdClient *IntentEtcdClient) SetWithTTL(key, value string, ttl time.Duration) error {
+  api := client.NewKeysAPI(etcdClient.etcd)
+  opts := &client.SetOptions{TTL: ttl}
+  _, err := api.Set(context.Background(), key, value, opts)
+  return err
+}
+
+// Updatekey updates a key with a ttl value
+func (etcdClient *IntentEtcdClient) UpdateKeyWithTTL(key string, ttl time.Duration) error {
+    api := client.NewKeysAPI(etcdClient.etcd)
+    refreshopts := &client.SetOptions{Refresh: true, PrevExist: client.PrevExist, TTL: ttl}
+    _, err := api.Set(context.Background(), key, "", refreshopts)
+    return err
+}
+
 
 func (etcdClient *IntentEtcdClient) WatchRecursive(directory string, callback Callback) error {
   api := client.NewKeysAPI(etcdClient.etcd)
