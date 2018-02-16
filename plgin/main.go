@@ -14,10 +14,11 @@ import (
 )
 
 type PluginConf struct {
-    Directory       string
-    Functions       []string
-    NumberOfJobs    int
-    NumberOfGofers  int
+    PluginDirectory   string
+    WatchDirectory    string
+    Functions         []string
+    NumberOfJobs      int
+    NumberOfGofers    int
 }
 
 type Plugin struct {
@@ -46,7 +47,8 @@ func (p *Plugin)ReadConf() error {
     return err
   }
 
-  fmt.Println("Dir:", p.Conf.Directory)
+  fmt.Println("Plugin Directory:", p.Conf.PluginDirectory)
+  fmt.Println("Watch Directory:", p.Conf.WatchDirectory)
   fmt.Println("Functions:", p.Conf.Functions)
 
   return nil
@@ -55,13 +57,13 @@ func (p *Plugin)ReadConf() error {
 func (p *Plugin)ReadPlugin() {
   var fullname []string
 
-  filename := p.Conf.Directory
+  filename := p.Conf.PluginDirectory
   files, err := ioutil.ReadDir(filename)
     if err != nil {
         log.Fatal(err)
     }
 
-    fullname = append(fullname, p.Conf.Directory)
+    fullname = append(fullname, p.Conf.PluginDirectory)
 
     for _, file := range files {
       p.PluginNames = append(p.PluginNames, strings.Join( append(fullname, file.Name()), "" ) )
@@ -90,22 +92,22 @@ func (p *Plugin)CheckPlugin() {
 }
 
 // Callback function
-/*
-func Change(key, newValue string) {
-  fmt.Printf("Changedd %s: %s\n", key, newValue)
+func HandleMsg(key, newValue string) {
+  fmt.Printf("Got Msg %s: %s\n", key, newValue)
+
   m := make(map[string]string)
   m[key] = newValue
+  
   counter += 1
-  AddJob(counter, m)
+  //AddJob(counter, m)
   fmt.Printf("#goroutines: %d\n", runtime.NumGoroutine())
 }
-*/
 
 func main() {
   fmt.Print("Hello\n\n")
 
-  //pl := new(Plugin)
-  //pl.ReadConf()
+  pl := new(Plugin)
+  pl.ReadConf()
 
   //WatcherInit(pl.Conf.NumberOfJobs)
   //InitDispatcher(pl.Conf.NumberOfGofers)
@@ -117,16 +119,18 @@ func main() {
     return
   }
 
-  // MASTER ELECTION
+  // Master Election
   elec.NewMember(etcdcl)
 
-  /*
-  err = etcdcl.WatchRecursive("example", Change)
+  // Create Work Queues
+  // etcl.NewEtcdQueues(etcdcl)
+
+  //  Watch the Configured etcd directory for messages
+  err = etcdcl.WatchRecursive(pl.Conf.WatchDirectory, HandleMsg)
   if err != nil {
     fmt.Print("Error: ", err)
     return
   }
-  */
 
   //AddJob(10, nil)
   //AddJob(20, nil)

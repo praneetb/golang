@@ -29,7 +29,7 @@ type MemberType struct {
   Uuid     string // My UUID
   State    int    // My State
   Muuid    string // Master's UUID
-  Client   *etcl.IntentEtcdClient // etcd client 
+  Client   *etcl.IntentEtcdClient // etcd client
   Timer    *time.Timer // Timer to check master
 }
 
@@ -65,6 +65,7 @@ func NewMember(client *etcl.IntentEtcdClient) (*MemberType) {
   return member
 }
 
+// Refresh TTL if we are the Master
 func (m *MemberType) MasterRefreshTimer() {
   for ; ; {
     m.Timer = time.NewTimer(5 * time.Second)
@@ -85,7 +86,7 @@ func (m *MemberType) TryBeMaster() error {
     return err
   }
   if master == "" {
-    m.Client.SetWithTTL("master", m.Uuid, 20 * time.Second)
+    err = m.Client.SetWithTTL("master", m.Uuid, 20 * time.Second)
     if err != nil {
       fmt.Print("Error: ", err)
       return err

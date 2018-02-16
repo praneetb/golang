@@ -30,6 +30,9 @@ type EtcdClient interface {
   // UpdateKeyWithTTL updates a key with a ttl value
   UpdateKeyWithTTL(key string, ttl time.Duration) error
 
+  // MkDir creates an empty directory in etcd
+  MkDir(directory string) error
+
   // Recursively Watches a Dirctory for changes
   WatchRecursive(directory string, callback Callback) error
 }
@@ -91,6 +94,30 @@ func (etcdClient *IntentEtcdClient) UpdateKeyWithTTL(key string, ttl time.Durati
     return err
 }
 
+func (etcdClient *IntentEtcdClient) MkDir(directory string) error {
+  api := client.NewKeysAPI(etcdClient.etcd)
+
+  // Check if Directory exists
+  res, err := api.Get(context.Background(), directory, nil)
+  if err != nil && !client.IsKeyNotFound(err) {
+    // Directory exists, ignore error
+    return nil
+  }
+
+  if err != nil && client.IsKeyNotFound(err) {
+    // Directory doesn't exist, create it
+    opts := &client.SetOptions{Dir: true, PrevExist: client.PrevIgnore}
+    _, err = api.Set(context.Background(), directory, "", opts)
+    return err
+  }
+
+  // directory exists as a keyname
+  if !res.Node.Dir {
+    return fmt.Errorf("Cannot overwrite key/value with a directory: %v", directory)
+  }
+
+  return nil
+}
 
 func (etcdClient *IntentEtcdClient) WatchRecursive(directory string, callback Callback) error {
   api := client.NewKeysAPI(etcdClient.etcd)
