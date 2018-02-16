@@ -15,7 +15,7 @@ import (
 )
 
 
-type Callback func(key, newValue string)
+type Callback func(index uint64, key, newValue string)
 
 type EtcdClient interface {
   // Get gets a value in Etcd
@@ -33,13 +33,17 @@ type EtcdClient interface {
   // MkDir creates an empty directory in etcd
   MkDir(directory string) error
 
-  // Recursively Watches a Dirctory for changes
+  // Recursively Watches a Directory for changes
   WatchRecursive(directory string, callback Callback) error
+
+  // Recursively Watches a Directory for changes After an Index
+  WatchRecursiveAfterIndex(directory string, callback Callback) error
 }
 
 // IntentEtcdClient implements EtcdClient
 type IntentEtcdClient struct {
-    etcd client.Client
+    CurrIndex  uint64
+    etcd       client.Client
 }
 
 
@@ -55,7 +59,7 @@ func Dial(etcdURI string) (*IntentEtcdClient, error) {
     fmt.Printf("Error connecting to ETCD: %s\n", etcdURI)
     return nil, err
   }
-  return &IntentEtcdClient{etcd}, nil
+  return &IntentEtcdClient{0, etcd}, nil
 }
 
 // Get gets a value in Etcd
@@ -78,8 +82,9 @@ func (etcdClient *IntentEtcdClient) Set(key, value string) error {
   return err
 }
 
-// Set sets a value in Etcd with TTL 
-func (etcdClient *IntentEtcdClient) SetWithTTL(key, value string, ttl time.Duration) error {
+// Set sets a value in Etcd with TTL
+func (etcdClient *IntentEtcdClient) SetWithTTL(key, value string,
+      ttl time.Duration) error {
   api := client.NewKeysAPI(etcdClient.etcd)
   opts := &client.SetOptions{TTL: ttl}
   _, err := api.Set(context.Background(), key, value, opts)
@@ -87,9 +92,11 @@ func (etcdClient *IntentEtcdClient) SetWithTTL(key, value string, ttl time.Durat
 }
 
 // Updatekey updates a key with a ttl value
-func (etcdClient *IntentEtcdClient) UpdateKeyWithTTL(key string, ttl time.Duration) error {
+func (etcdClient *IntentEtcdClient) UpdateKeyWithTTL(key string,
+      ttl time.Duration) error {
     api := client.NewKeysAPI(etcdClient.etcd)
-    refreshopts := &client.SetOptions{Refresh: true, PrevExist: client.PrevExist, TTL: ttl}
+    refreshopts := &client.SetOptions{Refresh: true,
+       PrevExist: client.PrevExist, TTL: ttl}
     _, err := api.Set(context.Background(), key, "", refreshopts)
     return err
 }
@@ -113,19 +120,22 @@ func (etcdClient *IntentEtcdClient) MkDir(directory string) error {
 
   // directory exists as a keyname
   if !res.Node.Dir {
-    return fmt.Errorf("Cannot overwrite key/value with a directory: %v", directory)
+    return fmt.Errorf("Cannot overwrite key/value with a directory: %v",
+                       directory)
   }
 
   return nil
 }
 
-func (etcdClient *IntentEtcdClient) WatchRecursive(directory string, callback Callback) error {
+func (etcdClient *IntentEtcdClient) WatchRecursive(directory string,
+      callback Callback) error {
   api := client.NewKeysAPI(etcdClient.etcd)
   afterIndex := uint64(0)
 
   for {
-    watcher := api.Watcher(directory, &client.WatcherOptions{Recursive: true, AfterIndex: afterIndex})
-    response, err := watcher.Next(context.Background())
+    watcher := api.Watcher(directory, &client.WatcherOptions{Recursive: true,
+                           AfterIndex: afterIndex})
+    resp, err := watcher.Next(context.Background())
     if err != nil {
       if shouldIgnoreError(err) {
         continue
@@ -133,8 +143,28 @@ func (etcdClient *IntentEtcdClient) WatchRecursive(directory string, callback Ca
       return err
     }
 
-    afterIndex = response.Index
-    callback(response.Node.Key, response.Node.Value)
+    afterIndex = resp.Index
+    callback(resp.Index, resp.Node.Key, resp.Node.Value)
+  }
+}
+
+func (etcdClient *IntentEtcdClient) WatchRecursiveAfterIndex(directory string,
+      callback Callback) error {
+  api := client.NewKeysAPI(etcdClient.etcd)
+
+  for {
+    watcher := api.Watcher(directory, &client.WatcherOptions{Recursive: true,
+                           AfterIndex: etcdClient.CurrIndex})
+    resp, err := watcher.Next(context.Background())
+    if err != nil {
+      if shouldIgnoreError(err) {
+        continue
+      }
+      return err
+    }
+
+    etcdClient.CurrIndex = resp.Index
+    callback(resp.Index, resp.Node.Key, resp.Node.Value)
   }
 }
 

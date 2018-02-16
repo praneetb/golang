@@ -3,5 +3,7 @@ Election
 - API to query state
 - relinquish Mastership
 
-
-
+main
+- etcd server be configurable
+- timeout for QueueLockTime
+- 
