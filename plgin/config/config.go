@@ -9,18 +9,27 @@ import (
   "github.com/go-ini/ini"
 )
 
+type DefaultConfig struct {
+  QueueLockTime   int
+  MsgIndexString  string
+  MasterElection  bool
+  EtcdServers     string
+}
+
 type PluginConfig struct {
-    PluginDirectory   string
-    WatchDirectory    string
-    Functions         []string
-    NumberOfJobs      int
-    NumberOfGofers    int
+  PluginDirectory   string
+  WatchDirectory    string
+  Functions         []string
+  NumberOfJobs      int
+  NumberOfGofers    int
 }
 
 type Config struct {
-  FileName     string
-  PluginConfig   *PluginConfig
-  PluginNames  []string
+  FileName         string
+  EtcdServersList  []string
+  DefaultConfig    *DefaultConfig
+  PluginConfig     *PluginConfig
+  PluginNames      []string
 }
 
 var counter int
@@ -33,6 +42,12 @@ func (c *Config)ReadConfig() error {
     return err
   }
 
+  c.DefaultConfig = &DefaultConfig {
+    QueueLockTime:  10,
+    MsgIndexString: "MsgIndex",
+    MasterElection: true,
+  }
+
   c.PluginConfig = &PluginConfig {
     NumberOfJobs:   1,
     NumberOfGofers: 1,
@@ -40,9 +55,22 @@ func (c *Config)ReadConfig() error {
 
   err = cfg.Section("PLUGIN").MapTo(c.PluginConfig)
   if err != nil {
-    fmt.Print("Error !!")
+    fmt.Println("Error Reading Plugin Config!")
     return err
   }
+
+  err = cfg.Section("DEFAULT").MapTo(c.DefaultConfig)
+  if err != nil {
+    fmt.Println("Error Reading Default Config!")
+    return err
+  }
+
+  c.EtcdServersList = strings.Split(c.DefaultConfig.EtcdServers, ",")
+  fmt.Println("ETCD Servers:", c.DefaultConfig.EtcdServers)
+  fmt.Println("ETCD Servers List:", c.EtcdServersList)
+  fmt.Println("Queue Lock Time:", c.DefaultConfig.QueueLockTime)
+  fmt.Println("MsgIndexString:", c.DefaultConfig.MsgIndexString)
+  fmt.Println("MasterElection:", c.DefaultConfig.MasterElection)
 
   fmt.Println("Plugin Directory:", c.PluginConfig.PluginDirectory)
   fmt.Println("Watch Directory:", c.PluginConfig.WatchDirectory)

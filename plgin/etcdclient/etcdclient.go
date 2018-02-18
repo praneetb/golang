@@ -51,9 +51,9 @@ type IntentEtcdClient struct {
 
 
 // Dial constructs a new EtcdClient
-func Dial(etcdURI string) (*IntentEtcdClient, error) {
+func Dial(etcdURI []string) (*IntentEtcdClient, error) {
   cfg := client.Config{
-    Endpoints: []string{etcdURI},
+    Endpoints: etcdURI,
     //Transport: DefaultTransport,
   }
 
@@ -171,8 +171,9 @@ func (etcdClient *IntentEtcdClient) WatchRecursiveAfterIndex(directory string,
   }
 }
 
-func(etcdClient *IntentEtcdClient) CreateMsgLock(Uri []string) *etcdsync.Mutex {
-  lk, err := etcdsync.New("/MsgLock", 15, Uri)
+func(etcdClient *IntentEtcdClient) CreateMsgLock(Uri []string, lockKey string,
+    lockTimeout int) *etcdsync.Mutex {
+  lk, err := etcdsync.New(lockKey, lockTimeout, Uri)
   if lk == nil || err != nil {
     fmt.Println("etcdsync.New failed ", err)
     return nil
@@ -205,9 +206,11 @@ func(etcdClient *IntentEtcdClient) CheckSetIndex(index uint64) int {
   if err == nil {
     // compare with passed index
     storedIndex, _ := strconv.ParseUint(storedIndexStr, 10, 64)
-    if index < storedIndex {
+    if index <= storedIndex {
+      fmt.Printf("StoredIndex %d >= CurrIndex %d\n", storedIndex, index)
       return -1
     }
+    fmt.Printf("StoredIndex %d < CurrIndex %d\n", storedIndex, index)
     newIndexStr := strconv.FormatUint(index, 10)
     etcdClient.Set("/MsgIndex", newIndexStr)
     if err != nil {

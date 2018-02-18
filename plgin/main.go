@@ -64,9 +64,7 @@ func HandleMsg(etcdClient *etcl.IntentEtcdClient,
 func main() {
   fmt.Print("Hello\n\n")
 
-  conf := new(config.Config)
-  conf.FileName = "main.ini"
-  conf.ReadConfig()
+  conf := config.NewConfig("main.ini")
   //conf.ReadPlugin()
   //conf.CheckPlugin()
 
@@ -74,7 +72,7 @@ func main() {
   watch.InitDispatcher(conf.PluginConfig.NumberOfGofers)
   watch.RunDispatcher()
 
-  etcdcl, err := etcl.Dial("http://127.0.0.1:2379")
+  etcdcl, err := etcl.Dial(conf.EtcdServersList)
   if err != nil {
     fmt.Print("Error: ", err)
     return
@@ -86,8 +84,9 @@ func main() {
   // Create Work Queues
   // etcl.NewEtcdQueues(etcdcl)
 
-  lock := etcdcl.CreateMsgLock(
-    []string{"http://127.0.0.1:2379"})
+  lock := etcdcl.CreateMsgLock(conf.EtcdServersList,
+    conf.DefaultConfig.MsgIndexString,
+    conf.DefaultConfig.QueueLockTime)
 	if lock == nil {
 		log.Printf("Lock failed")
 		return
