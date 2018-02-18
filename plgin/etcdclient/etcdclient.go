@@ -9,13 +9,15 @@ package etcdclient
 
 import (
   "fmt"
+  "strconv"
   "time"
   "github.com/coreos/etcd/client"
+  "github.com/zieckey/etcdsync"
   "golang.org/x/net/context"
 )
 
 
-type Callback func(index uint64, key, newValue string)
+type Callback func(cl *IntentEtcdClient, index uint64, key, newValue string)
 
 type EtcdClient interface {
   // Get gets a value in Etcd
@@ -44,6 +46,7 @@ type EtcdClient interface {
 type IntentEtcdClient struct {
     CurrIndex  uint64
     etcd       client.Client
+    Lock       *etcdsync.Mutex
 }
 
 
@@ -59,7 +62,7 @@ func Dial(etcdURI string) (*IntentEtcdClient, error) {
     fmt.Printf("Error connecting to ETCD: %s\n", etcdURI)
     return nil, err
   }
-  return &IntentEtcdClient{0, etcd}, nil
+  return &IntentEtcdClient{0, etcd, nil}, nil
 }
 
 // Get gets a value in Etcd
@@ -144,7 +147,7 @@ func (etcdClient *IntentEtcdClient) WatchRecursive(directory string,
     }
 
     afterIndex = resp.Index
-    callback(resp.Index, resp.Node.Key, resp.Node.Value)
+    callback(etcdClient, resp.Index, resp.Node.Key, resp.Node.Value)
   }
 }
 
@@ -164,8 +167,56 @@ func (etcdClient *IntentEtcdClient) WatchRecursiveAfterIndex(directory string,
     }
 
     etcdClient.CurrIndex = resp.Index
-    callback(resp.Index, resp.Node.Key, resp.Node.Value)
+    callback(etcdClient, resp.Index, resp.Node.Key, resp.Node.Value)
   }
+}
+
+func(etcdClient *IntentEtcdClient) CreateMsgLock(Uri []string) *etcdsync.Mutex {
+  lk, err := etcdsync.New("/MsgLock", 15, Uri)
+  if lk == nil || err != nil {
+    fmt.Println("etcdsync.New failed ", err)
+    return nil
+  }
+  etcdClient.Lock = lk
+  return lk
+}
+
+func(etcdClient *IntentEtcdClient) MsgLock() {
+  err := etcdClient.Lock.Lock()
+	if err != nil {
+		fmt.Printf("etcdsync.Lock failed")
+	} else {
+		fmt.Printf("etcdsync.Lock OK")
+	}
+}
+
+func(etcdClient *IntentEtcdClient) MsgUnLock() {
+	err := etcdClient.Lock.Unlock()
+	if err != nil {
+		fmt.Printf("etcdsync.Unlock failed")
+	} else {
+		fmt.Printf("etcdsync.Unlock OK")
+	}
+}
+
+func(etcdClient *IntentEtcdClient) CheckSetIndex(index uint64) int {
+  // Read Stored index
+  storedIndexStr, err := etcdClient.Get("/MsgIndex")
+  if err == nil {
+    // compare with passed index
+    storedIndex, _ := strconv.ParseUint(storedIndexStr, 10, 64)
+    if index < storedIndex {
+      return -1
+    }
+    newIndexStr := strconv.FormatUint(index, 10)
+    etcdClient.Set("/MsgIndex", newIndexStr)
+    if err != nil {
+      fmt.Println("Cannot Set MsgIndex")
+    }
+    return 0
+  }
+  // Set passed index to Stored Index if greater
+  return 0
 }
 
 func shouldIgnoreError(err error) bool {

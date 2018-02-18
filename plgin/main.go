@@ -2,6 +2,7 @@ package main
 
 import (
   "fmt"
+  "log"
   "runtime"
   "time"
   "github.com/praneetb/golang/plgin/config"
@@ -27,27 +28,51 @@ type Plugin struct {
 var counter int
 
 // Callback function
-func HandleMsg(index uint64, key, newValue string) {
-  fmt.Printf("Index: %d, Got Msg %s: %s\n", key, newValue, index)
+func HandleMsg(etcdClient *etcl.IntentEtcdClient,
+               index uint64, key, newValue string) {
+  fmt.Printf("Index: %d, Got Msg %s: %s\n", index, key, newValue)
 
-  m := make(map[string]string)
-  m[key] = newValue
+  // Try Locking
+  // if Lock Acquired
+  //  - check index > current_index
+  //    - if true
+  //      - set current index to Index
+  //      - process Msg
+  //    - if false
+  //      - ignore msg
+  //  - Unlock
+  // if Lock not Acquired
+  // - Wait on lock
 
-  counter += 1
-  watch.AddJob(counter, m)
-  fmt.Printf("#goroutines: %d\n", runtime.NumGoroutine())
+  etcdClient.MsgLock()
+  log.Printf("Acquired the lock!")
+
+  ret := etcdClient.CheckSetIndex(index)
+  if ret == 0 {
+    m := make(map[string]string)
+    m[key] = newValue
+    counter += 1
+    watch.AddJob(counter, m)
+    time.Sleep(8*time.Second)
+    fmt.Printf("#goroutines: %d\n", runtime.NumGoroutine())
+  }
+
+  etcdClient.MsgUnLock()
+  log.Printf("Released the lock!")
 }
 
 func main() {
   fmt.Print("Hello\n\n")
 
   conf := new(config.Config)
+  conf.FileName = "main.ini"
+  conf.ReadConfig()
   //conf.ReadPlugin()
   //conf.CheckPlugin()
 
-  //WatcherInit(conf.Conf.NumberOfJobs)
-  //InitDispatcher(pl.Conf.NumberOfGofers)
-  //RunDispatcher()
+  watch.WatcherInit(conf.PluginConfig.NumberOfJobs)
+  watch.InitDispatcher(conf.PluginConfig.NumberOfGofers)
+  watch.RunDispatcher()
 
   etcdcl, err := etcl.Dial("http://127.0.0.1:2379")
   if err != nil {
@@ -60,6 +85,13 @@ func main() {
 
   // Create Work Queues
   // etcl.NewEtcdQueues(etcdcl)
+
+  lock := etcdcl.CreateMsgLock(
+    []string{"http://127.0.0.1:2379"})
+	if lock == nil {
+		log.Printf("Lock failed")
+		return
+	}
 
   //  Watch the Configured etcd directory for messages
   err = etcdcl.WatchRecursive(conf.PluginConfig.WatchDirectory, HandleMsg)

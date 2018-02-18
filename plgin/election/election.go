@@ -100,7 +100,8 @@ func (m *MemberType) TryBeMaster() error {
 }
 
 // Callback function for Master Watch
-func (m *MemberType) MasterChange(index uint64, key, newValue string) {
+func (m *MemberType) MasterChange(client *etcl.IntentEtcdClient,
+                                  index uint64, key, newValue string) {
   fmt.Printf("Master Changed %s: %s\n", key, newValue)
   m.Muuid = newValue
 

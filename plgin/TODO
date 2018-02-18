@@ -6,4 +6,8 @@ Election
 main
 - etcd server be configurable
 - timeout for QueueLockTime
-- 
+-
+
+/MsgLock
+/MsgIndex
+Let both be configurable
